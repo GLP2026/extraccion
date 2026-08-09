@@ -118,11 +118,28 @@
 
   .hist-controls{display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; color:var(--text-dim); font-family:'IBM Plex Mono',monospace; flex-wrap:wrap;}
   .hist-controls select{background:var(--panel-alt); border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:12px;}
+  .hist-controls button.apply-btn{background:var(--accent); border:1px solid var(--accent); color:#12171C; font-weight:600; padding:6px 12px; border-radius:6px; cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:12px;}
+  .hist-controls button:not(.apply-btn){background:var(--panel-alt); border:1px solid var(--line); color:var(--text-dim); padding:6px 12px; border-radius:6px; cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:12px;}
+  .hist-hint{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-faint);}
   .trend-full{width:100%; height:300px; display:block;}
   .grid-line{stroke:rgba(148,163,184,0.28); stroke-width:1; stroke-dasharray:3 3;}
 
-  .lavados-svg{width:100%; height:auto; max-height:360px; display:block;}
+  .lavados-img-wrap{ position:relative; width:100%; border-radius:8px; overflow:hidden; background:#e9e9e9; line-height:0; }
+  .lavados-bg-img{ width:100%; height:auto; display:block; }
+  .lavados-markers{ position:absolute; inset:0; }
+  .lavados-marker{
+    position:absolute; width:24px; height:24px; margin-left:-12px; margin-top:-12px;
+    border-radius:50%; border:2px solid #12171C; box-shadow:0 0 6px rgba(0,0,0,0.5);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:8.5px; font-weight:700; color:#12171C;
+    user-select:none; -webkit-user-select:none;
+  }
+  .lavados-marker.on{ background:var(--ok); }
+  .lavados-marker.off{ background:var(--crit); }
+  .lavados-marker.calibrating{ cursor:grab; outline:2px dashed var(--accent); outline-offset:2px; }
+  .lavados-marker.dragging{ cursor:grabbing; z-index:10; }
   .lavados-legend{display:flex; gap:6px; flex-wrap:wrap; margin-top:12px;}
+  body.view-operario #calibrateToggleBtn, body.view-operario #calibrateResetBtn, body.view-operario #calibrateHint{ display:none !important; }
 
   .threshold-scroll{max-height:340px; overflow-y:auto; padding-right:6px;}
   .threshold-row{ margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--line-soft); }
@@ -176,7 +193,15 @@
 
     <section class="panel" style="margin-bottom:24px;">
       <h2>Lavados prendidos</h2>
-      <div id="lavadosDiagram"></div>
+      <div class="hist-controls">
+        <button type="button" id="calibrateToggleBtn" class="apply-btn">🎯 Calibrar posiciones</button>
+        <button type="button" id="calibrateResetBtn" style="display:none;">Restaurar posiciones originales</button>
+        <span class="hist-hint" id="calibrateHint" style="display:none;">Arrastrá cada punto hasta la bomba real. Se guarda solo, en este navegador.</span>
+      </div>
+      <div id="lavadosImgWrap" class="lavados-img-wrap">
+        <img id="lavadosBgImg" src="extractor-bg.png" alt="Extractor Desmet" class="lavados-bg-img" onerror="this.style.display='none'">
+        <div id="lavadosMarkers" class="lavados-markers"></div>
+      </div>
       <div class="lavados-legend" id="lavadosLegend"></div>
     </section>
 
@@ -268,14 +293,12 @@ const ICONS = {
   thermo:  '<path d="M12 4v10.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>',
   bolt:    '<path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z" fill="currentColor"/>',
   density: '<circle cx="8" cy="8" r="1.7" fill="currentColor"/><circle cx="16" cy="8" r="1.7" fill="currentColor"/><circle cx="8" cy="16" r="1.7" fill="currentColor"/><circle cx="16" cy="16" r="1.7" fill="currentColor"/>',
-  speed:   '<path d="M4 16a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 16 L16 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16" r="1.4" fill="currentColor"/>',
   scale:   '<path d="M12 4v16M7 8h10M7 8l-3 6h6l-3-6zM17 8l-3 6h6l-3-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>',
   gauge:   '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 12 L16 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>'
 };
 function paramIcon(name){ return `<svg class="param-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">${ICONS[name]||''}</svg>`; }
 
-/* PARÁMETROS NUMÉRICOS — todos "sin clasificar" (bands vacío) hasta que se carguen umbrales reales.
-   Los domain[] son rangos ESTIMADOS solo para escalar el gráfico — no son umbrales. */
+/* PARÁMETROS NUMÉRICOS — todos "sin clasificar" (bands vacío) hasta que se carguen umbrales reales */
 const PARAMS = {
   caudal_destilacion:      { label:'Caudal destilación', unit:'lt/h', icon:'scale', column:'CAUDAL DESTILACIÓN (lt/h)', decimals:0, domain:[0,3000], bands:[] },
   densidad_destilacion:    { label:'Densidad destilación', unit:'kg/m3', icon:'density', column:'DENSIDAD DESTILACIÓN (kg/m3)', decimals:1, domain:[600,700], bands:[] },
@@ -307,6 +330,25 @@ const TEXT_FIELDS = {
 
 const KNOWN_PUMPS = ['P2A','P2B','P3A','P3B','P3C','P3D','P3E','P3F','P3G','P3H','P3I','P3J','P3K','5G'];
 
+/* Posiciones por defecto de cada bomba sobre extractor-bg.png, en % del ancho/alto de la imagen.
+   Son una primera estimación — usar "Calibrar posiciones" para ajustarlas a la imagen real. */
+const DEFAULT_PUMP_POSITIONS = {
+  P2B: { x: 7,  y: 88 },
+  P3F: { x: 16, y: 79 },
+  P3A: { x: 22, y: 90 },
+  P3B: { x: 28, y: 79 },
+  P3C: { x: 33, y: 90 },
+  P3D: { x: 38, y: 79 },
+  P3E: { x: 44, y: 90 },
+  P3G: { x: 52, y: 79 },
+  P3H: { x: 54, y: 90 },
+  P3I: { x: 65, y: 79 },
+  P3J: { x: 64, y: 90 },
+  P3K: { x: 74, y: 79 },
+  '5G': { x: 91, y: 48 },
+  P2A: { x: 93, y: 94 },
+};
+
 function evalFromBands(v, bands){
   if (v === null) return {status:'nodata', note:'Sin dato'};
   if (!bands || bands.length === 0) return {status:'unset', note:'Umbral pendiente de confirmar'};
@@ -329,8 +371,25 @@ const RECENT_ROWS = 8;
 const QUALITY_WINDOW = 50;
 const AUTH_KEY = 'glp_supervisor_auth_extraccion';
 const THRESHOLD_KEY = 'glp_threshold_overrides_extraccion';
+const PUMP_POSITIONS_KEY = 'glp_lavados_positions_extraccion';
 
 let rowsGlobal = [];
+let pumpPositions = {};
+let calibrating = false;
+let dragCode = null;
+
+/* POSICIONES DE BOMBAS (calibración) */
+function loadPumpPositions(){
+  let override = {};
+  try{ override = JSON.parse(localStorage.getItem(PUMP_POSITIONS_KEY) || '{}'); } catch(e){}
+  pumpPositions = {};
+  KNOWN_PUMPS.forEach(code => { pumpPositions[code] = override[code] || DEFAULT_PUMP_POSITIONS[code] || {x:50,y:50}; });
+}
+function savePumpPositions(){
+  const override = {};
+  KNOWN_PUMPS.forEach(code => { override[code] = pumpPositions[code]; });
+  localStorage.setItem(PUMP_POSITIONS_KEY, JSON.stringify(override));
+}
 
 /* UMBRALES */
 function loadThresholdOverrides(){ try { return JSON.parse(localStorage.getItem(THRESHOLD_KEY) || '{}'); } catch(e){ return {}; } }
@@ -585,43 +644,62 @@ function renderHistChart(){
 document.getElementById('histParamSelect').addEventListener('change', renderHistChart);
 document.getElementById('histRangeSelect').addEventListener('change', renderHistChart);
 
-/* DIAGRAMA DE LAVADOS */
-function pumpIcon(cx, cy, code, isOn){
-  const color = isOn ? 'var(--ok)' : 'var(--crit)';
-  const glow = isOn ? 'rgba(76,174,121,0.65)' : 'rgba(225,85,79,0.55)';
-  return `<g>
-    <rect x="${cx-17}" y="${cy-11}" width="34" height="22" rx="4" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.2"></rect>
-    <circle cx="${cx}" cy="${cy}" r="15" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"></circle>
-    <circle cx="${cx}" cy="${cy}" r="7.5" fill="${color}" style="filter:drop-shadow(0 0 4px ${glow})"></circle>
-    <text x="${cx}" y="${cy+32}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="13" font-weight="600" fill="var(--text)">${code}</text>
-  </g>`;
-}
-function drawLavadosDiagram(activeSet){
-  const rowAY = 190, rowBY = 285;
-  const rowA = [ ['P3F',150], ['P3B',290], ['P3D',430], ['P3G',570], ['P3I',710], ['P3K',840] ];
-  const rowB = [ ['P3A',220], ['P3C',360], ['P3E',500], ['P3H',640], ['P3J',775] ];
-  let svg = '';
-  svg += `<rect x="130" y="30" width="740" height="90" rx="10" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.5"></rect>`;
-  svg += `<rect x="820" y="10" width="16" height="30" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.2"></rect>`;
-  const is5G = activeSet.has('5G');
-  svg += `<circle cx="895" cy="75" r="26" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.5"></circle>`;
-  svg += `<circle cx="895" cy="75" r="11" fill="${is5G?'var(--ok)':'var(--crit)'}" style="filter:drop-shadow(0 0 4px ${is5G?'rgba(76,174,121,0.65)':'rgba(225,85,79,0.55)'})"></circle>`;
-  svg += `<text x="895" y="118" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="13" font-weight="600" fill="var(--text)">5G</text>`;
-  rowA.forEach(([code,x]) => { svg += `<line x1="${x}" y1="120" x2="${x}" y2="${rowAY-15}" stroke="var(--line)" stroke-width="2"></line>`; });
-  svg += `<line x1="${rowB[0][1]}" y1="${rowBY-28}" x2="${rowB[rowB.length-1][1]}" y2="${rowBY-28}" stroke="var(--line)" stroke-width="2"></line>`;
-  rowB.forEach(([code,x]) => { svg += `<line x1="${x}" y1="${rowBY-28}" x2="${x}" y2="${rowBY-15}" stroke="var(--line)" stroke-width="2"></line>`; });
-  rowA.forEach(([code,x]) => { svg += pumpIcon(x, rowAY, code, activeSet.has(code)); });
-  rowB.forEach(([code,x]) => { svg += pumpIcon(x, rowBY, code, activeSet.has(code)); });
-  svg += pumpIcon(55, rowBY, 'P2B', activeSet.has('P2B'));
-  svg += pumpIcon(950, rowBY, 'P2A', activeSet.has('P2A'));
-  return `<svg viewBox="0 0 1000 340" class="lavados-svg" role="img" aria-label="Diagrama de lavados prendidos">${svg}</svg>`;
-}
+/* PANEL DE LAVADOS — imagen real + marcadores superpuestos, con calibración manual */
 function renderLavadosPanel(rows){
   const last = rows[rows.length-1];
   const active = last ? last.lavadosActive : new Set();
-  document.getElementById('lavadosDiagram').innerHTML = drawLavadosDiagram(active);
+  const container = document.getElementById('lavadosMarkers');
+  container.innerHTML = KNOWN_PUMPS.map(code => {
+    const pos = pumpPositions[code];
+    const isOn = active.has(code);
+    return `<div class="lavados-marker ${isOn?'on':'off'}${calibrating?' calibrating':''}" data-code="${code}" style="left:${pos.x}%; top:${pos.y}%;" title="${code}">${calibrating?code:''}</div>`;
+  }).join('');
   document.getElementById('lavadosLegend').innerHTML = KNOWN_PUMPS.map(code => `<span class="marcha-chip${active.has(code)?' on':''}">${code}</span>`).join('');
+  if (calibrating) attachMarkerDrag();
 }
+function attachMarkerDrag(){
+  document.querySelectorAll('.lavados-marker').forEach(el => {
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); dragCode = el.dataset.code; el.classList.add('dragging'); });
+    el.addEventListener('touchstart', (e) => { dragCode = el.dataset.code; el.classList.add('dragging'); }, {passive:true});
+  });
+}
+function moveDrag(clientX, clientY){
+  if (!dragCode) return;
+  const wrap = document.getElementById('lavadosImgWrap');
+  const rect = wrap.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  let xPct = ((clientX - rect.left) / rect.width) * 100;
+  let yPct = ((clientY - rect.top) / rect.height) * 100;
+  xPct = Math.max(0, Math.min(100, xPct));
+  yPct = Math.max(0, Math.min(100, yPct));
+  pumpPositions[dragCode] = { x: Math.round(xPct*10)/10, y: Math.round(yPct*10)/10 };
+  const marker = document.querySelector(`.lavados-marker[data-code="${dragCode}"]`);
+  if (marker){ marker.style.left = xPct+'%'; marker.style.top = yPct+'%'; }
+}
+document.addEventListener('mousemove', (e) => { if (dragCode) moveDrag(e.clientX, e.clientY); });
+document.addEventListener('mouseup', () => {
+  if (!dragCode) return;
+  document.querySelectorAll('.lavados-marker.dragging').forEach(el=>el.classList.remove('dragging'));
+  dragCode = null; savePumpPositions();
+});
+document.addEventListener('touchmove', (e) => { if (dragCode && e.touches[0]){ e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); } }, {passive:false});
+document.addEventListener('touchend', () => {
+  if (!dragCode) return;
+  document.querySelectorAll('.lavados-marker.dragging').forEach(el=>el.classList.remove('dragging'));
+  dragCode = null; savePumpPositions();
+});
+document.getElementById('calibrateToggleBtn').addEventListener('click', () => {
+  calibrating = !calibrating;
+  document.getElementById('calibrateToggleBtn').textContent = calibrating ? '✓ Terminar calibración' : '🎯 Calibrar posiciones';
+  document.getElementById('calibrateResetBtn').style.display = calibrating ? 'inline-block' : 'none';
+  document.getElementById('calibrateHint').style.display = calibrating ? 'inline' : 'none';
+  if (rowsGlobal.length) renderLavadosPanel(rowsGlobal);
+});
+document.getElementById('calibrateResetBtn').addEventListener('click', () => {
+  localStorage.removeItem(PUMP_POSITIONS_KEY);
+  loadPumpPositions();
+  if (rowsGlobal.length) renderLavadosPanel(rowsGlobal);
+});
 
 /* CARDS */
 function renderCards(rows){
@@ -709,6 +787,7 @@ async function loadData(){
   } catch(err){ console.error(err); setConn('error', err.message); }
 }
 
+loadPumpPositions();
 applyThresholdOverrides(); renderThresholdSettings(); populateHistSelect();
 document.getElementById('refreshBtn').addEventListener('click', loadData);
 loadData(); setInterval(loadData, REFRESH_MS);
