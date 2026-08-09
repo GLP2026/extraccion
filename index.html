@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLP · Panel de Proceso — Extracción de Soja</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#12171C; --panel:#1B2229; --panel-alt:#212A32; --line:#2B3540; --line-soft:#232C34;
+    --text:#E7ECEF; --text-dim:#8C99A6; --text-faint:#5E6A75; --accent:#E8A33D;
+    --ok:#4CAE79; --ok-bg:rgba(76,174,121,0.14);
+    --warn:#E8A33D; --warn-bg:rgba(232,163,61,0.14);
+    --crit:#E1554F; --crit-bg:rgba(225,85,79,0.16);
+    --nodata:#5E6A75; --nodata-bg:rgba(94,106,117,0.12);
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'IBM Plex Sans','Segoe UI',sans-serif; -webkit-font-smoothing:antialiased; min-height:100vh;}
+  #app{max-width:none; margin:0; padding:20px 28px 60px;}
+  a{color:var(--accent);}
+
+  .topbar{display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px; border-bottom:1px solid var(--line); padding-bottom:16px; margin-bottom:22px;}
+  .brand{display:flex; align-items:center; gap:12px;}
+  .logo{height:42px; width:auto; max-width:170px; object-fit:contain; display:block;}
+  .brand-text{display:flex; flex-direction:column;}
+  .brand-eyebrow{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); display:block; margin-bottom:4px;}
+  .topbar h1{font-family:'Oswald',sans-serif; font-weight:600; font-size:26px; letter-spacing:0.01em; margin:0; text-transform:uppercase;}
+  .status-cluster{display:flex; align-items:center; gap:10px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text-dim); flex-wrap:wrap;}
+  .conn-dot{width:8px;height:8px;border-radius:50%; background:var(--nodata); display:inline-block;}
+  .conn-dot.conn-ok{background:var(--ok); box-shadow:0 0 8px rgba(76,174,121,0.6);}
+  .conn-dot.conn-loading{background:var(--accent); animation:pulse 1.1s ease-in-out infinite;}
+  .conn-dot.conn-error{background:var(--crit); box-shadow:0 0 8px rgba(225,85,79,0.6);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+  .sep{color:var(--text-faint);}
+  #refreshBtn, #viewToggle, #logoutBtn, #fullscreenBtn{background:var(--panel-alt); border:1px solid var(--line); color:var(--text); border-radius:6px; cursor:pointer; font-family:'IBM Plex Mono',monospace; line-height:1;}
+  #refreshBtn, #fullscreenBtn{width:28px;height:28px; font-size:14px; display:inline-flex;align-items:center;justify-content:center;}
+  #viewToggle, #logoutBtn{font-size:11px; letter-spacing:0.03em; padding:6px 10px;}
+  #logoutBtn{display:none; color:var(--text-dim);}
+  body:not(.view-operario) #logoutBtn{display:inline-block;}
+  #refreshBtn:hover, #viewToggle:hover, #logoutBtn:hover, #fullscreenBtn:hover{border-color:var(--accent); color:var(--accent);}
+
+  .modal-overlay{display:none; position:fixed; inset:0; background:rgba(8,10,13,0.78); align-items:center; justify-content:center; z-index:50; padding:16px;}
+  .modal-box{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px; width:320px; display:flex; flex-direction:column; gap:12px;}
+  .modal-box.wide{ width:640px; max-width:92vw; max-height:85vh; overflow-y:auto; }
+  .modal-box h3{margin:0; font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:15px; letter-spacing:0.03em;}
+  .modal-box label{display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--text-dim); font-family:'IBM Plex Mono',monospace;}
+  .modal-box input{background:var(--panel-alt); border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:13px;}
+  .modal-text{color:var(--text-dim); font-size:13px; line-height:1.5; margin:0;}
+  .login-error{color:var(--crit); font-size:11.5px; min-height:14px; margin:0;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:2px; flex-wrap:wrap;}
+  .modal-actions button{font-family:'IBM Plex Mono',monospace; font-size:12px; padding:7px 14px; border-radius:6px; cursor:pointer;}
+  #loginCancel, #configCloseBtn{background:transparent; border:1px solid var(--line); color:var(--text-dim);}
+  .modal-actions button[type="submit"], .modal-actions button.primary{background:var(--accent); border:1px solid var(--accent); color:#12171C; font-weight:600;}
+
+  .status-strip{display:flex; flex-wrap:wrap; gap:22px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 20px; margin-bottom:24px;}
+  .status-item{display:flex; flex-direction:column; gap:3px;}
+  .status-item-label{font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-faint);}
+  .status-item-value{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:16px; color:var(--text);}
+
+  .marcha-chip{font-family:'IBM Plex Mono',monospace; font-size:10px; padding:3px 8px; border-radius:20px; background:var(--crit-bg); color:var(--crit);}
+  .marcha-chip.on{background:var(--ok-bg); color:var(--ok);}
+
+  .cards-grid{display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:24px;}
+  @media (max-width:1400px){ .cards-grid{grid-template-columns:repeat(4, 1fr);} }
+  @media (max-width:1100px){ .cards-grid{grid-template-columns:repeat(3, 1fr);} }
+  @media (max-width:700px){ .cards-grid{grid-template-columns:repeat(2, 1fr);} }
+  .card{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--nodata); border-radius:var(--radius); padding:11px 13px 10px;}
+  .card.status-ok{border-left-color:var(--ok);}
+  .card.status-warn{border-left-color:var(--warn); background:linear-gradient(180deg, rgba(232,163,61,0.10), transparent 60%);}
+  .card.status-crit{border-left-width:6px; border-left-color:var(--crit); background:linear-gradient(180deg, rgba(225,85,79,0.22), rgba(225,85,79,0.06) 70%);}
+  .card.status-info{border-left-color:var(--accent);}
+  .card-head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px;}
+  .card-label{font-family:'Oswald',sans-serif; font-size:12.5px; text-transform:uppercase; letter-spacing:0.02em; color:var(--text-dim); line-height:1.25; display:flex; align-items:center; gap:6px;}
+  .param-icon{color:var(--text-faint); flex-shrink:0;}
+  .card.status-ok .param-icon{color:var(--ok);} .card.status-warn .param-icon{color:var(--warn);} .card.status-crit .param-icon{color:var(--crit);} .card.status-info .param-icon{color:var(--accent);}
+  .pill{font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.02em; padding:3px 6px; border-radius:20px; white-space:nowrap; flex-shrink:0;}
+  .pill-ok{background:var(--ok-bg); color:var(--ok);} .pill-warn{background:var(--warn-bg); color:var(--warn);}
+  .pill-crit{background:var(--crit-bg); color:var(--crit); font-weight:600;} .pill-nodata, .pill-unset{background:var(--nodata-bg); color:var(--text-faint);}
+  .card-value{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:23px; margin:3px 0 6px;}
+  .card-value .unit{font-size:12px; font-weight:400; color:var(--text-dim); margin-left:3px;}
+  .card-value-text{font-family:'Oswald',sans-serif; font-weight:600; font-size:19px; color:var(--accent); margin:6px 0 6px; text-transform:uppercase;}
+  .trend-svg{width:100%; height:56px; display:block;}
+  .band-ok{fill:var(--ok-bg);} .band-warn{fill:var(--warn-bg);} .band-crit{fill:var(--crit-bg);}
+  .trend-line{fill:none; stroke:var(--text); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; opacity:0.85;}
+  .dot-last{fill:var(--accent); stroke:var(--bg); stroke-width:1.5;}
+  .card-foot{display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text-faint); margin-top:4px;}
+
+  .supervisor-workspace{display:grid; grid-template-columns:190px 1fr; gap:16px; align-items:start;}
+  @media (max-width:900px){ .supervisor-workspace{grid-template-columns:1fr;} .supervisor-nav{flex-direction:row; position:static; overflow-x:auto;} }
+  .supervisor-nav{display:flex; flex-direction:column; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:10px; position:sticky; top:20px;}
+  .nav-item{background:transparent; border:none; color:var(--text-dim); font-family:'Oswald',sans-serif; font-size:12.5px; text-transform:uppercase; letter-spacing:0.03em; padding:10px 12px; border-radius:6px; text-align:left; cursor:pointer; white-space:nowrap;}
+  .nav-item:hover{background:var(--panel-alt); color:var(--text);}
+  .nav-item.active{background:var(--accent); color:#12171C; font-weight:600;}
+  .nav-item.nav-config{margin-top:8px; padding-top:12px; border-top:1px solid var(--line-soft); color:var(--text-faint);}
+  .content-panel{display:none;}
+  .content-panel.active{display:grid; gap:14px;}
+  .content-panel.analysis-grid.active{grid-template-columns:1.4fr 1fr;}
+  @media (max-width:820px){ .content-panel.analysis-grid.active{grid-template-columns:1fr;} }
+  .analysis-col{display:flex; flex-direction:column; gap:14px;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px;}
+  .panel h2{font-family:'Oswald',sans-serif; font-size:14px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-dim); margin:0 0 12px;}
+  table{width:100%; border-collapse:collapse; font-family:'IBM Plex Mono',monospace; font-size:11.5px;}
+  th,td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--line-soft); white-space:nowrap;}
+  th{color:var(--text-faint); font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:0.05em;}
+  td{color:var(--text-dim);}
+  .dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px;}
+  .dot-ok{background:var(--ok);} .dot-warn{background:var(--warn);} .dot-crit{background:var(--crit);} .dot-nodata,.dot-unset{background:var(--nodata);}
+  .table-wrap{overflow-x:auto;}
+
+  #qualityList{list-style:none; margin:0; padding:0; font-size:12.5px; color:var(--text-dim);}
+  #qualityList li{padding:7px 0; border-bottom:1px solid var(--line-soft); display:flex; justify-content:space-between; gap:10px;}
+  #qualityList li:last-child{border-bottom:none;}
+  #qualityList .qty{font-family:'IBM Plex Mono',monospace; color:var(--text);}
+  #qualityList .qty.warn-count{color:var(--warn);}
+
+  .hist-controls{display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; color:var(--text-dim); font-family:'IBM Plex Mono',monospace; flex-wrap:wrap;}
+  .hist-controls select{background:var(--panel-alt); border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:12px;}
+  .trend-full{width:100%; height:300px; display:block;}
+  .grid-line{stroke:rgba(148,163,184,0.28); stroke-width:1; stroke-dasharray:3 3;}
+
+  .lavados-svg{width:100%; height:auto; max-height:360px; display:block;}
+  .lavados-legend{display:flex; gap:6px; flex-wrap:wrap; margin-top:12px;}
+
+  .threshold-scroll{max-height:340px; overflow-y:auto; padding-right:6px;}
+  .threshold-row{ margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--line-soft); }
+  .threshold-row:last-child{ border-bottom:none; margin-bottom:0; padding-bottom:0; }
+  .threshold-param-label{ font-family:'Oswald',sans-serif; font-size:12.5px; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.02em; }
+  .threshold-unit{ color:var(--text-faint); font-weight:400; text-transform:none; }
+  .threshold-inputs{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+  .threshold-input-group{ display:flex; flex-direction:column; gap:3px; font-size:10px; color:var(--text-faint); font-family:'IBM Plex Mono',monospace; }
+  .threshold-input-group input{background:var(--panel-alt); border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; width:80px; font-family:'IBM Plex Mono',monospace; font-size:12px;}
+  .threshold-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .threshold-actions button, .threshold-actions label.upload-btn{font-family:'IBM Plex Mono',monospace; font-size:11.5px; padding:7px 12px; border-radius:6px; cursor:pointer; background:var(--panel-alt); border:1px solid var(--line); color:var(--text-dim);}
+  .threshold-actions button.primary{ background:var(--accent); border-color:var(--accent); color:#12171C; font-weight:600; }
+  .threshold-actions button:hover, .threshold-actions label.upload-btn:hover{ border-color:var(--accent); color:var(--accent); }
+
+  footer{margin-top:22px; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-faint); text-align:center;}
+  body.view-operario .supervisor-workspace{display:none;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="Gente de la Pampa" class="logo" onerror="this.style.display='none'">
+      <div class="brand-text">
+        <span class="brand-eyebrow">GLP S.A. · Molienda de Soja</span>
+        <h1>Extracción — Panel de Proceso</h1>
+      </div>
+    </div>
+    <div class="status-cluster">
+      <span id="connDot" class="conn-dot"></span>
+      <span id="connText" aria-live="polite">conectando…</span>
+      <span class="sep">·</span>
+      <span>Último dato: <strong id="lastLoadTime">—</strong></span>
+      <button id="refreshBtn" title="Actualizar ahora">⟳</button>
+      <button id="fullscreenBtn" title="Pantalla completa">⛶</button>
+      <button id="viewToggle">Vista supervisor</button>
+      <button id="logoutBtn" title="Salir de vista supervisor">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="status-strip" aria-label="Último registro">
+      <div class="status-item"><span class="status-item-label">Último registro</span><span class="status-item-value" id="statUltimo">—</span></div>
+      <div class="status-item"><span class="status-item-label">Operador</span><span class="status-item-value" id="statOperador">—</span></div>
+      <div class="status-item"><span class="status-item-label">Supervisor</span><span class="status-item-value" id="statSupervisor">—</span></div>
+      <div class="status-item"><span class="status-item-label">Estado de planta</span><span class="status-item-value" id="statEstado">—</span></div>
+    </section>
+
+    <section class="cards-grid" id="cardsGrid" aria-label="Indicadores actuales"></section>
+
+    <section class="panel" style="margin-bottom:24px;">
+      <h2>Lavados prendidos</h2>
+      <div id="lavadosDiagram"></div>
+      <div class="lavados-legend" id="lavadosLegend"></div>
+    </section>
+
+    <section class="supervisor-workspace">
+      <nav class="supervisor-nav">
+        <button class="nav-item active" data-panel="analisis">Análisis de variables</button>
+        <button class="nav-item nav-config" id="navConfigBtn">⚙ Configuración de umbrales</button>
+      </nav>
+
+      <div class="content-panel analysis-grid active" data-content="analisis">
+        <div class="analysis-col">
+          <div class="panel">
+            <h2>Gráfico histórico</h2>
+            <div class="hist-controls">
+              <label for="histParamSelect">Parámetro:</label>
+              <select id="histParamSelect"></select>
+              <label for="histRangeSelect">Período:</label>
+              <select id="histRangeSelect">
+                <option value="7" selected>Últimos 7 días</option>
+                <option value="30">Últimos 30 días</option>
+                <option value="90">Últimos 90 días</option>
+                <option value="all">Todo el histórico</option>
+              </select>
+            </div>
+            <div id="histChartContainer"></div>
+          </div>
+          <div class="panel">
+            <h2>Registros recientes</h2>
+            <div class="table-wrap">
+              <table id="recentTable">
+                <thead><tr><th>Fecha / hora</th><th>Operador</th><th>Estado</th><th>Caudal destil.</th><th>Densidad destil.</th><th>Vacío extractor</th></tr></thead>
+                <tbody id="recentTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="analysis-col">
+          <div class="panel">
+            <h2>Calidad de datos (últimas 50 cargas)</h2>
+            <ul id="qualityList"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Actualiza automáticamente cada 5 min · fuente: planilla de carga de operarios · umbrales editables en Vista supervisor
+  </footer>
+</div>
+
+<div id="loginOverlay" class="modal-overlay">
+  <form id="loginForm" class="modal-box" role="dialog" aria-modal="true">
+    <h3>Acceso supervisor</h3>
+    <label>Usuario<input type="text" id="loginUser" autocomplete="username" required></label>
+    <label>Contraseña<input type="password" id="loginPass" autocomplete="current-password" required></label>
+    <p id="loginError" class="login-error"></p>
+    <div class="modal-actions">
+      <button type="button" id="loginCancel">Cancelar</button>
+      <button type="submit">Ingresar</button>
+    </div>
+  </form>
+</div>
+
+<div id="configOverlay" class="modal-overlay">
+  <div class="modal-box wide" role="dialog" aria-modal="true">
+    <h3>Configuración de umbrales</h3>
+    <p class="modal-text">Todos los parámetros arrancan "sin clasificar" — completá los 4 campos de cada uno para definir sus rangos normal/advertencia/crítico. Se guarda en este navegador.</p>
+    <div id="thresholdSettings" class="threshold-scroll"></div>
+    <div class="threshold-actions">
+      <button type="button" id="thresholdSaveBtn" class="primary">Guardar cambios</button>
+      <button type="button" id="thresholdResetBtn">Restaurar originales</button>
+      <button type="button" id="thresholdExportBtn">Exportar (.json)</button>
+      <label class="upload-btn" for="thresholdImportInput">Importar (.json)</label>
+      <input type="file" id="thresholdImportInput" accept=".json" style="display:none">
+    </div>
+    <p class="modal-text" id="thresholdSaveMsg"></p>
+    <div class="modal-actions">
+      <button type="button" id="configCloseBtn">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script>
+/* ICONOS */
+const ICONS = {
+  drop:    '<path d="M12 3C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  thermo:  '<path d="M12 4v10.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>',
+  bolt:    '<path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z" fill="currentColor"/>',
+  density: '<circle cx="8" cy="8" r="1.7" fill="currentColor"/><circle cx="16" cy="8" r="1.7" fill="currentColor"/><circle cx="8" cy="16" r="1.7" fill="currentColor"/><circle cx="16" cy="16" r="1.7" fill="currentColor"/>',
+  speed:   '<path d="M4 16a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 16 L16 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16" r="1.4" fill="currentColor"/>',
+  scale:   '<path d="M12 4v16M7 8h10M7 8l-3 6h6l-3-6zM17 8l-3 6h6l-3-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>',
+  gauge:   '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 12 L16 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>'
+};
+function paramIcon(name){ return `<svg class="param-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">${ICONS[name]||''}</svg>`; }
+
+/* PARÁMETROS NUMÉRICOS — todos "sin clasificar" (bands vacío) hasta que se carguen umbrales reales.
+   Los domain[] son rangos ESTIMADOS solo para escalar el gráfico — no son umbrales. */
+const PARAMS = {
+  caudal_destilacion:      { label:'Caudal destilación', unit:'lt/h', icon:'scale', column:'CAUDAL DESTILACIÓN (lt/h)', decimals:0, domain:[0,3000], bands:[] },
+  densidad_destilacion:    { label:'Densidad destilación', unit:'kg/m3', icon:'density', column:'DENSIDAD DESTILACIÓN (kg/m3)', decimals:1, domain:[600,700], bands:[] },
+  temp_economizador_60:    { label:'Temperatura economizador 60', unit:'°C', icon:'thermo', column:'ECONOMIZADOR 60 TEMPERATURA (°C)', decimals:0, domain:[40,100], bands:[] },
+  temp_calentador_18a:     { label:'Temperatura calentador 18A', unit:'°C', icon:'thermo', column:'CALENTADOR 18A TEMPERATURA (°C)', decimals:0, domain:[60,140], bands:[] },
+  temp_calentador_521:     { label:'Temperatura calentador 521', unit:'°C', icon:'thermo', column:'CALENTADOR 521 TEMPERATURA (°C)', decimals:0, domain:[60,140], bands:[] },
+  temp_aceite_mineral_121: { label:'Temperatura aceite mineral (calentador 121)', unit:'°C', icon:'thermo', column:'ACEITE MINERAL CALENTADOR 121 TEMPERATURA (°C)', decimals:0, domain:[60,140], bands:[] },
+  vacio_lavador_122:       { label:'Vacío aceite mineral lavador 122', unit:'mmHg', icon:'gauge', column:'ACEITE MINERAL LAVADOR 122 VACÍO (mmHg)', decimals:0, domain:[0,760], bands:[] },
+  vacio_extractor:         { label:'Vacío extractor', unit:'mmHg', icon:'gauge', column:'EXTRACTOR VACÍO (mmHg)', decimals:0, domain:[0,760], bands:[] },
+  vacio_toster:            { label:'Vacío tostador', unit:'mmHg', icon:'gauge', column:'TOSTER VACÍO (mmHg)', decimals:0, domain:[0,760], bands:[] },
+  bajo_vacio:              { label:'Bajo vacío', unit:'mmHg', icon:'gauge', column:'BAJO VACÍO (mmHg)', decimals:0, domain:[0,760], bands:[] },
+  alto_vacio:              { label:'Alto vacío', unit:'mmHg', icon:'gauge', column:'ALTO VACÍO (mmHg)', decimals:0, domain:[0,760], bands:[] },
+  pct_dosificadora_agua:   { label:'Dosificadora de agua a desgomado', unit:'%', icon:'drop', column:'Porcentaje de dosificadora de agua a desgomado (1 al 99)', decimals:0, domain:[1,99], bands:[] },
+  temp_solvente_entrada:   { label:'Temperatura solvente entrada', unit:'°C', icon:'thermo', column:'SOLVENTE ENTRADA TEMPERATURA (°C)', decimals:0, domain:[20,70], bands:[] },
+  temp_decantador_32:      { label:'Temperatura decantador 32', unit:'°C', icon:'thermo', column:'DECANTADOR 32 TEMPERATURA (°C)', decimals:0, domain:[40,100], bands:[] },
+  temp_toster_gases:       { label:'Temperatura gases toster', unit:'°C', icon:'thermo', column:'TOSTER TEMPERATURA GASES (°C)', decimals:0, domain:[60,120], bands:[] },
+  temp_toster_piso:        { label:'Temperatura piso toster', unit:'°C', icon:'thermo', column:'TOSTER TEMPERATURA PISO (°C)', decimals:0, domain:[80,140], bands:[] },
+  temp_extractor:          { label:'Temperatura extractor', unit:'°C', icon:'thermo', column:'EXTRACTOR TEMPERATURA (°C)', decimals:0, domain:[40,70], bands:[] },
+  stock_tka:               { label:'Stock solvente TKA', unit:'lt', icon:'scale', column:'TKA SOLVENTE STOCK (lt)', decimals:0, domain:[0,50000], bands:[] },
+  stock_tkb:               { label:'Stock solvente TKB', unit:'lt', icon:'scale', column:'TKB SOLVENTE STOCK (lt)', decimals:0, domain:[0,50000], bands:[] },
+};
+const PARAMS_DEFAULTS = JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(PARAMS).map(([id,cfg]) => [id, cfg.bands]))));
+
+/* Campos de texto (posición de bombas — no llevan umbral) */
+const TEXT_FIELDS = {
+  bomba_p2a: { label:'Bomba P2A a extractor', icon:'bolt', column:'Bomba P2A a extractor' },
+  bomba_p1:  { label:'Bomba P1 a extractor', icon:'bolt', column:'Bomba P1 a extractor' },
+};
+
+const KNOWN_PUMPS = ['P2A','P2B','P3A','P3B','P3C','P3D','P3E','P3F','P3G','P3H','P3I','P3J','P3K','5G'];
+
+function evalFromBands(v, bands){
+  if (v === null) return {status:'nodata', note:'Sin dato'};
+  if (!bands || bands.length === 0) return {status:'unset', note:'Umbral pendiente de confirmar'};
+  for (const b of bands){ if (v <= b.to) return {status:b.status, note:b.note}; }
+  return {status:bands[bands.length-1].status, note:bands[bands.length-1].note};
+}
+function bandsToChartBands(bands, domain){
+  if (!bands || bands.length === 0) return [];
+  const [dmin, dmax] = domain; const chart = []; let from = dmin;
+  for (const b of bands){ const to = (b.to === Infinity) ? dmax : Math.min(Math.max(b.to, dmin), dmax); chart.push({status:b.status, from, to}); from = to; }
+  return chart;
+}
+function plainStatusLabel(s){ return {ok:'Normal', warn:'Advertencia', crit:'Crítico'}[s] || s; }
+const GENERIC_ACTION = { ok:'', nodata:'', unset:'', warn:'Fuera del rango óptimo.', crit:'Estado crítico — avisar al supervisor.' };
+
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS_-sbrTlv4fr_jZBvJvXYyZDQ9Lo270Qgbed5GK73z-NAL_pyoRvw4KBF_wiwSIgJ2dhecZCg_pDtR/pub?output=csv";
+const REFRESH_MS = 5 * 60 * 1000;
+const HISTORY_POINTS = 30;
+const RECENT_ROWS = 8;
+const QUALITY_WINDOW = 50;
+const AUTH_KEY = 'glp_supervisor_auth_extraccion';
+const THRESHOLD_KEY = 'glp_threshold_overrides_extraccion';
+
+let rowsGlobal = [];
+
+/* UMBRALES */
+function loadThresholdOverrides(){ try { return JSON.parse(localStorage.getItem(THRESHOLD_KEY) || '{}'); } catch(e){ return {}; } }
+function saveThresholdOverrides(obj){ localStorage.setItem(THRESHOLD_KEY, JSON.stringify(obj)); }
+function applyThresholdOverrides(){
+  const overrides = loadThresholdOverrides();
+  for (const [id, cfg] of Object.entries(PARAMS)){
+    const baseline = PARAMS_DEFAULTS[id];
+    const ov = overrides[id];
+    if (baseline.length === 0){
+      if (ov && ov.length === 4 && ov.every(v => typeof v === 'number' && !Number.isNaN(v))){
+        cfg.bands = [
+          {status:'crit', to:ov[0], note:'Fuera de rango — bajo'},
+          {status:'warn', to:ov[1], note:'Por debajo del rango normal'},
+          {status:'ok', to:ov[2], note:'Normal'},
+          {status:'warn', to:ov[3], note:'Por encima del rango normal'},
+          {status:'crit', to:Infinity, note:'Fuera de rango — alto'}
+        ];
+      } else { cfg.bands = []; }
+      continue;
+    }
+    cfg.bands = JSON.parse(JSON.stringify(baseline));
+    if (!ov) continue;
+    ov.forEach((val, i) => { if (cfg.bands[i] && typeof val === 'number' && !Number.isNaN(val)) cfg.bands[i].to = val; });
+  }
+}
+function renderThresholdSettings(){
+  const container = document.getElementById('thresholdSettings'); let html = '';
+  for (const [id, cfg] of Object.entries(PARAMS)){
+    const isClassified = cfg.bands && cfg.bands.length > 1;
+    html += `<div class="threshold-row"><div class="threshold-param-label">${cfg.label} <span class="threshold-unit">(${cfg.unit})${!isClassified ? ' — sin clasificar' : ''}</span></div><div class="threshold-inputs">`;
+    if (isClassified){
+      for (let i = 0; i < cfg.bands.length - 1; i++){
+        const b = cfg.bands[i], next = cfg.bands[i+1];
+        html += `<label class="threshold-input-group"><span>${plainStatusLabel(b.status)} → ${plainStatusLabel(next.status)}</span><input type="number" step="any" data-param="${id}" data-idx="${i}" value="${b.to}"></label>`;
+      }
+    } else {
+      const labels = ['Crítico bajo hasta','Advertencia baja hasta','Normal hasta','Advertencia alta hasta'];
+      const domain = cfg.domain;
+      const defaults = [domain[0], domain[0]+(domain[1]-domain[0])*0.25, domain[0]+(domain[1]-domain[0])*0.75, domain[1]];
+      for (let i = 0; i < 4; i++){
+        html += `<label class="threshold-input-group"><span>${labels[i]}</span><input type="number" step="any" data-param="${id}" data-idx="${i}" value="${defaults[i]}"></label>`;
+      }
+    }
+    html += `</div></div>`;
+  }
+  container.innerHTML = html;
+}
+function rerenderAll(){ if (!rowsGlobal.length) return; renderCards(rowsGlobal); renderRecentTable(rowsGlobal); renderHistChart(); }
+document.getElementById('navConfigBtn').addEventListener('click', () => { document.getElementById('configOverlay').style.display = 'flex'; });
+document.getElementById('configCloseBtn').addEventListener('click', () => { document.getElementById('configOverlay').style.display = 'none'; });
+document.getElementById('thresholdSaveBtn').addEventListener('click', () => {
+  const inputs = document.querySelectorAll('#thresholdSettings input[data-param]');
+  const overrides = loadThresholdOverrides(); const grouped = {};
+  inputs.forEach(inp => { const id = inp.dataset.param, idx = parseInt(inp.dataset.idx, 10); const val = parseFloat(inp.value); if (!grouped[id]) grouped[id] = []; grouped[id][idx] = val; });
+  Object.assign(overrides, grouped); saveThresholdOverrides(overrides); applyThresholdOverrides(); renderThresholdSettings(); rerenderAll();
+  document.getElementById('thresholdSaveMsg').textContent = 'Guardado — ' + fmtTime(new Date());
+});
+document.getElementById('thresholdResetBtn').addEventListener('click', () => {
+  saveThresholdOverrides({}); applyThresholdOverrides(); renderThresholdSettings(); rerenderAll();
+  document.getElementById('thresholdSaveMsg').textContent = 'Restaurado — ' + fmtTime(new Date());
+});
+document.getElementById('thresholdExportBtn').addEventListener('click', () => {
+  const data = JSON.stringify(loadThresholdOverrides(), null, 2);
+  const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'umbrales_extraccion.json'; a.click(); URL.revokeObjectURL(url);
+});
+document.getElementById('thresholdImportInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  try{
+    const text = await file.text(); const parsed = JSON.parse(text);
+    saveThresholdOverrides(parsed); applyThresholdOverrides(); renderThresholdSettings(); rerenderAll();
+    document.getElementById('thresholdSaveMsg').textContent = 'Configuración importada — ' + fmtTime(new Date());
+  } catch(err){ document.getElementById('thresholdSaveMsg').textContent = 'Error al importar: ' + err.message; }
+});
+
+/* NAVEGACIÓN SUPERVISOR */
+function showSupervisorPanel(name){
+  document.querySelectorAll('.content-panel').forEach(el => el.classList.toggle('active', el.dataset.content === name));
+  document.querySelectorAll('.nav-item[data-panel]').forEach(btn => btn.classList.toggle('active', btn.dataset.panel === name));
+}
+document.querySelectorAll('.nav-item[data-panel]').forEach(btn => btn.addEventListener('click', () => showSupervisorPanel(btn.dataset.panel)));
+
+/* PARSEO */
+function parseNumber(raw){
+  if (raw === undefined || raw === null) return null;
+  let s = String(raw).trim(); if (s === '') return null;
+  const invalid = new Set(['..','...','.','nose','no se','n/a','na','-','--','?','sin dato']);
+  if (invalid.has(s.toLowerCase())) return null;
+  if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+  const n = parseFloat(s); if (Number.isNaN(n)) return null; return n;
+}
+function parseTimestamp(raw){
+  if (!raw) return null;
+  const parts = String(raw).trim().split(' '); if (parts.length < 2) return null;
+  const dparts = parts[0].split('/').map(Number); if (dparts.length < 3) return null;
+  const [d, m, y] = dparts; const tparts = parts[1].split(':').map(Number);
+  const hh = tparts[0]||0, mm = tparts[1]||0, ss = tparts[2]||0;
+  if (!d || !m || !y) return null;
+  const dt = new Date(y, m-1, d, hh, mm, ss);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+function normalizeHeader(h){ return String(h).trim().replace(/\s+/g, ' ').toLowerCase(); }
+function parseLavadosActive(raw){
+  if (!raw) return new Set();
+  return new Set(String(raw).split(',').map(s => s.trim().toUpperCase()).filter(Boolean));
+}
+function buildRows(rawRows){
+  if (!rawRows || rawRows.length === 0) return { rows:[], totalSeen:0, tsFailed:0, missing:[] };
+  const header = rawRows[0];
+  const map = {};
+  header.forEach((h, idx) => { const key = normalizeHeader(h); if (!map[key]) map[key] = []; map[key].push(idx); });
+
+  const resolved = {}, missing = [];
+  for (const [id, cfg] of Object.entries(PARAMS)){
+    const indices = map[normalizeHeader(cfg.column)];
+    if (!indices || indices.length === 0){ missing.push(cfg.label); resolved[id] = []; } else resolved[id] = indices;
+  }
+  const textResolved = {};
+  for (const [id, cfg] of Object.entries(TEXT_FIELDS)){
+    const indices = map[normalizeHeader(cfg.column)];
+    textResolved[id] = indices && indices.length ? indices[0] : undefined;
+  }
+  const fixedIdx = {
+    ts: (map[normalizeHeader('Marca temporal')] || [])[0],
+    operador: (map[normalizeHeader('Operador')] || [])[0],
+    supervisor: (map[normalizeHeader('Supervisor')] || [])[0],
+    estado: (map[normalizeHeader('ESTADO DE PLANTA')] || [])[0],
+    lavados: (map[normalizeHeader('Lavados prendidos (SELECCIONAR)')] || [])[0],
+  };
+
+  let totalSeen = 0, tsFailed = 0; const rows = [];
+  for (let r = 1; r < rawRows.length; r++){
+    const raw = rawRows[r];
+    if (!raw || raw.every(c => c === '' || c === undefined)) continue;
+    totalSeen++;
+    const ts = parseTimestamp(fixedIdx.ts !== undefined ? raw[fixedIdx.ts] : undefined);
+    if (!ts){ tsFailed++; continue; }
+    const row = {
+      ts,
+      operador: fixedIdx.operador !== undefined ? (raw[fixedIdx.operador] || '') : '',
+      supervisor: fixedIdx.supervisor !== undefined ? (raw[fixedIdx.supervisor] || '') : '',
+      estado: fixedIdx.estado !== undefined ? (raw[fixedIdx.estado] || '') : '',
+      lavadosActive: fixedIdx.lavados !== undefined ? parseLavadosActive(raw[fixedIdx.lavados]) : new Set(),
+      values:{}, text:{}
+    };
+    for (const [id, cfg] of Object.entries(PARAMS)){
+      const indices = resolved[id] || []; let v = null;
+      for (const idx of indices){ const candidate = parseNumber(raw[idx]); if (candidate !== null){ v = candidate; break; } }
+      row.values[id] = v;
+    }
+    for (const [id] of Object.entries(TEXT_FIELDS)){
+      const idx = textResolved[id];
+      row.text[id] = idx !== undefined ? String(raw[idx] || '').trim() : '';
+    }
+    rows.push(row);
+  }
+  rows.sort((a,b)=>a.ts-b.ts);
+  return { rows, totalSeen, tsFailed, missing };
+}
+
+/* HELPERS */
+function fmtTime(d){ const p = n => String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function fmtValue(v, cfg){ return v === null ? '—' : v.toFixed(cfg.decimals); }
+function statusText(s){ return {ok:'NORMAL', warn:'⚠ ADVERTENCIA', crit:'⛔ CRÍTICO', nodata:'SIN DATO', unset:'SIN CLASIFICAR'}[s] || 'SIN DATO'; }
+function scaleY(v, min, max, h, pad=6){ const c = Math.max(min, Math.min(max, v)); const ratio = (c - min) / (max - min); return h - pad - ratio * (h - 2*pad); }
+function statusDot(cfg, v){ const s = evalFromBands(v, cfg.bands).status; return `<span class="dot dot-${s}"></span>`; }
+
+function drawTrendSVG(cfg, points, viewW=300, viewH=56){
+  const W = viewW, H = viewH; const [min, max] = cfg.domain;
+  const bands = bandsToChartBands(cfg.bands, cfg.domain).map(b=>{ const y1 = scaleY(b.to, min, max, H); const y2 = scaleY(b.from, min, max, H); return `<rect x="0" y="${y1.toFixed(1)}" width="${W}" height="${Math.max(0,y2-y1).toFixed(1)}" class="band-${b.status}"></rect>`; }).join('');
+  const valid = points.filter(p=>p.v !== null); let line = '', dot = '';
+  if (valid.length > 1){
+    const n = valid.length; const coords = valid.map((p,i)=>[ (i/(n-1))*W, scaleY(p.v, min, max, H) ]);
+    line = 'M ' + coords.map(c=>`${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' L ');
+    const last = coords[coords.length-1]; dot = `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.2" class="dot-last"></circle>`;
+  } else if (valid.length === 1){ const y = scaleY(valid[0].v, min, max, H); dot = `<circle cx="${W/2}" cy="${y.toFixed(1)}" r="3.2" class="dot-last"></circle>`; }
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-svg" role="img" aria-label="Tendencia ${cfg.label}">${bands}${line?`<path d="${line}" class="trend-line"></path>`:''}${dot}</svg>`;
+}
+
+function buildTimeTicks(desde, hasta, count){
+  const t0 = desde.getTime(), t1 = Math.max(hasta.getTime(), t0+1);
+  const ticks = [];
+  for (let i = 0; i < count; i++){ ticks.push(new Date(t0 + (t1-t0) * (i/(count-1)))); }
+  return ticks;
+}
+function fmtTickLabel(d, spanMs){
+  const p = n => String(n).padStart(2,'0');
+  if (spanMs <= 2*24*3600000) return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}`;
+}
+function drawSingleTimeChart(cfg, points, desde, hasta, viewW=1000, viewH=280){
+  const W = viewW, H = viewH, leftPad = 50, bottomPad = 24;
+  const chartW = W - leftPad, chartH = H - bottomPad;
+  const t0 = desde.getTime(), t1 = Math.max(hasta.getTime(), t0+1);
+  const scaleX = ts => leftPad + ((ts - t0)/(t1 - t0)) * chartW;
+  const [dmin, dmax] = cfg.domain;
+  const scaleYv = v => { const c = Math.max(dmin, Math.min(dmax, v)); return chartH - ((c - dmin)/(dmax-dmin)) * (chartH-12) - 6; };
+
+  const bandsSvg = bandsToChartBands(cfg.bands, cfg.domain).map(b=>{
+    const y1 = scaleYv(b.to), y2 = scaleYv(b.from);
+    return `<rect x="${leftPad}" y="${Math.min(y1,y2).toFixed(1)}" width="${chartW}" height="${Math.abs(y2-y1).toFixed(1)}" class="band-${b.status}"></rect>`;
+  }).join('');
+
+  const valid = points.filter(p => p.v !== null);
+  let line = '', lastDot = '';
+  if (valid.length){
+    const coords = valid.map(p => [scaleX(p.ts.getTime()), scaleYv(p.v)]);
+    if (coords.length > 1) line = 'M ' + coords.map(c=>`${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' L ');
+    const last = coords[coords.length-1];
+    lastDot = `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" class="dot-last"></circle>`;
+  }
+
+  const yTicksSvg = [dmin, (dmin+dmax)/2, dmax].map(t => {
+    const y = scaleYv(t);
+    return `<text x="${leftPad-8}" y="${(y+4).toFixed(1)}" text-anchor="end" font-family="'IBM Plex Mono',monospace" font-size="11" fill="var(--text-faint)">${t.toFixed(cfg.decimals)}</text><line x1="${leftPad}" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}" class="grid-line"/>`;
+  }).join('');
+
+  const spanMs = t1 - t0;
+  const ticks = buildTimeTicks(desde, hasta, 6);
+  const xTicksSvg = ticks.map(d => {
+    const x = scaleX(d.getTime());
+    return `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${chartH}" class="grid-line"/><text x="${x.toFixed(1)}" y="${chartH+18}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" fill="var(--text-faint)">${fmtTickLabel(d, spanMs)}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-full" role="img" aria-label="Histórico ${cfg.label}">
+    ${bandsSvg}${yTicksSvg}${xTicksSvg}
+    ${line?`<path d="${line}" fill="none" stroke="var(--text)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"></path>`:''}
+    ${lastDot}
+  </svg>`;
+}
+function getMainHistRange(rangeVal){
+  const now = new Date();
+  if (rangeVal === 'all') return { desde: new Date(0), hasta: now };
+  const days = parseInt(rangeVal, 10);
+  return { desde: new Date(now.getTime() - days*24*3600*1000), hasta: now };
+}
+function populateHistSelect(){
+  const sel = document.getElementById('histParamSelect');
+  sel.innerHTML = Object.entries(PARAMS).map(([id,cfg]) => `<option value="${id}">${cfg.label}</option>`).join('');
+  if (sel.options.length) sel.options[0].selected = true;
+}
+function renderHistChart(){
+  const id = document.getElementById('histParamSelect').value; const cfg = PARAMS[id];
+  const container = document.getElementById('histChartContainer');
+  if (!cfg){ container.innerHTML = ''; return; }
+  const { desde, hasta } = getMainHistRange(document.getElementById('histRangeSelect').value);
+  const pts = rowsGlobal.filter(r => r.ts >= desde && r.ts <= hasta && r.values[id] !== null).map(r => ({ ts:r.ts, v:r.values[id] }));
+  if (!pts.length){ container.innerHTML = '<p class="modal-text">Sin datos en el período seleccionado.</p>'; return; }
+  container.innerHTML = drawSingleTimeChart(cfg, pts, desde, hasta, 1000, 280);
+}
+document.getElementById('histParamSelect').addEventListener('change', renderHistChart);
+document.getElementById('histRangeSelect').addEventListener('change', renderHistChart);
+
+/* DIAGRAMA DE LAVADOS */
+function pumpIcon(cx, cy, code, isOn){
+  const color = isOn ? 'var(--ok)' : 'var(--crit)';
+  const glow = isOn ? 'rgba(76,174,121,0.65)' : 'rgba(225,85,79,0.55)';
+  return `<g>
+    <rect x="${cx-17}" y="${cy-11}" width="34" height="22" rx="4" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.2"></rect>
+    <circle cx="${cx}" cy="${cy}" r="15" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"></circle>
+    <circle cx="${cx}" cy="${cy}" r="7.5" fill="${color}" style="filter:drop-shadow(0 0 4px ${glow})"></circle>
+    <text x="${cx}" y="${cy+32}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="13" font-weight="600" fill="var(--text)">${code}</text>
+  </g>`;
+}
+function drawLavadosDiagram(activeSet){
+  const rowAY = 190, rowBY = 285;
+  const rowA = [ ['P3F',150], ['P3B',290], ['P3D',430], ['P3G',570], ['P3I',710], ['P3K',840] ];
+  const rowB = [ ['P3A',220], ['P3C',360], ['P3E',500], ['P3H',640], ['P3J',775] ];
+  let svg = '';
+  svg += `<rect x="130" y="30" width="740" height="90" rx="10" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.5"></rect>`;
+  svg += `<rect x="820" y="10" width="16" height="30" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.2"></rect>`;
+  const is5G = activeSet.has('5G');
+  svg += `<circle cx="895" cy="75" r="26" fill="var(--panel-alt)" stroke="var(--line)" stroke-width="1.5"></circle>`;
+  svg += `<circle cx="895" cy="75" r="11" fill="${is5G?'var(--ok)':'var(--crit)'}" style="filter:drop-shadow(0 0 4px ${is5G?'rgba(76,174,121,0.65)':'rgba(225,85,79,0.55)'})"></circle>`;
+  svg += `<text x="895" y="118" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="13" font-weight="600" fill="var(--text)">5G</text>`;
+  rowA.forEach(([code,x]) => { svg += `<line x1="${x}" y1="120" x2="${x}" y2="${rowAY-15}" stroke="var(--line)" stroke-width="2"></line>`; });
+  svg += `<line x1="${rowB[0][1]}" y1="${rowBY-28}" x2="${rowB[rowB.length-1][1]}" y2="${rowBY-28}" stroke="var(--line)" stroke-width="2"></line>`;
+  rowB.forEach(([code,x]) => { svg += `<line x1="${x}" y1="${rowBY-28}" x2="${x}" y2="${rowBY-15}" stroke="var(--line)" stroke-width="2"></line>`; });
+  rowA.forEach(([code,x]) => { svg += pumpIcon(x, rowAY, code, activeSet.has(code)); });
+  rowB.forEach(([code,x]) => { svg += pumpIcon(x, rowBY, code, activeSet.has(code)); });
+  svg += pumpIcon(55, rowBY, 'P2B', activeSet.has('P2B'));
+  svg += pumpIcon(950, rowBY, 'P2A', activeSet.has('P2A'));
+  return `<svg viewBox="0 0 1000 340" class="lavados-svg" role="img" aria-label="Diagrama de lavados prendidos">${svg}</svg>`;
+}
+function renderLavadosPanel(rows){
+  const last = rows[rows.length-1];
+  const active = last ? last.lavadosActive : new Set();
+  document.getElementById('lavadosDiagram').innerHTML = drawLavadosDiagram(active);
+  document.getElementById('lavadosLegend').innerHTML = KNOWN_PUMPS.map(code => `<span class="marcha-chip${active.has(code)?' on':''}">${code}</span>`).join('');
+}
+
+/* CARDS */
+function renderCards(rows){
+  const grid = document.getElementById('cardsGrid');
+  const last = rows[rows.length-1];
+  grid.innerHTML = '';
+  for (const [id, cfg] of Object.entries(PARAMS)){
+    const currentVal = last ? last.values[id] : null;
+    const footTime = last ? fmtTime(last.ts) : '—';
+    const footOperator = last ? last.operador : '';
+    const res = evalFromBands(currentVal, cfg.bands);
+    const pts = rows.slice(-HISTORY_POINTS).map(r=>({ts:r.ts, v:r.values[id]}));
+    const card = document.createElement('div'); card.className = `card status-${res.status}`; card.title = res.note;
+    card.innerHTML = `<div class="card-head"><span class="card-label">${paramIcon(cfg.icon)}${cfg.label}</span><span class="pill pill-${res.status}">${statusText(res.status)}</span></div><div class="card-value">${fmtValue(currentVal, cfg)}<span class="unit">${cfg.unit}</span></div>${drawTrendSVG(cfg, pts)}<div class="card-foot"><span>${footTime}</span><span>${footOperator}</span></div>`;
+    grid.appendChild(card);
+  }
+  for (const [id, cfg] of Object.entries(TEXT_FIELDS)){
+    const val = last ? (last.text[id] || '—') : '—';
+    const footTime = last ? fmtTime(last.ts) : '—';
+    const footOperator = last ? last.operador : '';
+    const card = document.createElement('div'); card.className = 'card status-info';
+    card.innerHTML = `<div class="card-head"><span class="card-label">${paramIcon(cfg.icon)}${cfg.label}</span></div><div class="card-value-text">${val}</div><div class="card-foot"><span>${footTime}</span><span>${footOperator}</span></div>`;
+    grid.appendChild(card);
+  }
+}
+function renderRecentTable(rows){
+  const tbody = document.getElementById('recentTbody'); const slice = rows.slice(-RECENT_ROWS).reverse();
+  tbody.innerHTML = slice.map(r=>`<tr><td>${fmtTime(r.ts)}</td><td>${r.operador}</td><td>${r.estado}</td><td>${statusDot(PARAMS.caudal_destilacion, r.values.caudal_destilacion)}${fmtValue(r.values.caudal_destilacion, PARAMS.caudal_destilacion)}</td><td>${statusDot(PARAMS.densidad_destilacion, r.values.densidad_destilacion)}${fmtValue(r.values.densidad_destilacion, PARAMS.densidad_destilacion)}</td><td>${statusDot(PARAMS.vacio_extractor, r.values.vacio_extractor)}${fmtValue(r.values.vacio_extractor, PARAMS.vacio_extractor)}</td></tr>`).join('');
+}
+function renderQuality(rows, parseStats){
+  const list = document.getElementById('qualityList'); const window = rows.slice(-QUALITY_WINDOW); const items = [];
+  if (parseStats.missing && parseStats.missing.length) items.push(`<li><span>⚠ Columna no encontrada: ${parseStats.missing.join(', ')}</span><span class="qty warn-count">revisar nombre</span></li>`);
+  for (const [id, cfg] of Object.entries(PARAMS)){ const missing = window.filter(r => r.values[id] === null).length; if (missing > 0) items.push(`<li><span>${cfg.label}</span><span class="qty ${missing > window.length*0.15 ? 'warn-count':''}">${missing} sin dato</span></li>`); }
+  if (parseStats.tsFailed > 0) items.push(`<li><span>Filas con fecha/hora ilegible</span><span class="qty warn-count">${parseStats.tsFailed}</span></li>`);
+  list.innerHTML = items.length ? items.join('') : '<li><span>Sin problemas detectados</span><span class="qty">✓</span></li>';
+}
+function renderStatusStrip(rows){
+  const last = rows[rows.length-1];
+  document.getElementById('statUltimo').textContent = last ? fmtTime(last.ts) : '—';
+  document.getElementById('statOperador').textContent = last ? (last.operador || '—') : '—';
+  document.getElementById('statSupervisor').textContent = last ? (last.supervisor || '—') : '—';
+  document.getElementById('statEstado').textContent = last ? (last.estado || '—') : '—';
+}
+
+/* VISTA OPERARIO / SUPERVISOR + LOGIN */
+function isAuthed(){ return localStorage.getItem(AUTH_KEY) === '1'; }
+function setAuthed(v){ if (v) localStorage.setItem(AUTH_KEY,'1'); else localStorage.removeItem(AUTH_KEY); }
+function setView(view){ document.body.classList.toggle('view-operario', view === 'operario'); document.getElementById('viewToggle').textContent = view === 'operario' ? 'Vista supervisor' : 'Vista operario'; }
+function showLoginModal(){ document.getElementById('loginOverlay').style.display = 'flex'; document.getElementById('loginError').textContent = ''; document.getElementById('loginUser').focus(); }
+function hideLoginModal(){ document.getElementById('loginOverlay').style.display = 'none'; document.getElementById('loginForm').reset(); }
+let currentView = isAuthed() ? 'supervisor' : 'operario'; setView(currentView);
+document.getElementById('viewToggle').addEventListener('click', () => {
+  if (currentView === 'operario'){ if (isAuthed()){ currentView = 'supervisor'; setView(currentView); } else { showLoginModal(); } }
+  else { currentView = 'operario'; setView(currentView); }
+});
+document.getElementById('loginCancel').addEventListener('click', hideLoginModal);
+document.getElementById('loginForm').addEventListener('submit', (e) => {
+  e.preventDefault(); const u = document.getElementById('loginUser').value.trim().toLowerCase(); const p = document.getElementById('loginPass').value;
+  if (u === 'user' && p === 'user'){ setAuthed(true); hideLoginModal(); currentView = 'supervisor'; setView(currentView); }
+  else { document.getElementById('loginError').textContent = 'Usuario o contraseña incorrectos.'; }
+});
+document.getElementById('logoutBtn').addEventListener('click', () => { setAuthed(false); currentView = 'operario'; setView(currentView); });
+
+/* PANTALLA COMPLETA */
+function updateFullscreenBtn(){ const btn = document.getElementById('fullscreenBtn'); btn.title = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa'; }
+document.getElementById('fullscreenBtn').addEventListener('click', () => { if (!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(err => console.error(err)); } else { document.exitFullscreen(); } });
+document.addEventListener('fullscreenchange', updateFullscreenBtn); updateFullscreenBtn();
+
+/* CONEXIÓN Y CARGA */
+function setConn(state, msg){
+  const dot = document.getElementById('connDot'); const text = document.getElementById('connText');
+  dot.className = 'conn-dot conn-' + state; text.textContent = state==='ok' ? 'en línea' : state==='loading' ? 'actualizando…' : `error de conexión${msg?': '+msg:''}`;
+}
+async function loadData(){
+  setConn('loading');
+  try{
+    const res = await fetch(SHEET_URL + '&_ts=' + Date.now(), {cache:'no-store'}); if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text(); const parsed = Papa.parse(text, {skipEmptyLines:true});
+    const { rows, totalSeen, tsFailed, missing } = buildRows(parsed.data);
+    if (rows.length === 0) throw new Error('sin filas válidas');
+    rowsGlobal = rows;
+    renderStatusStrip(rows); renderCards(rows); renderRecentTable(rows); renderLavadosPanel(rows);
+    renderQuality(rows, {totalSeen, tsFailed, missing}); renderHistChart();
+    document.getElementById('lastLoadTime').textContent = fmtTime(rows[rows.length-1].ts); setConn('ok');
+  } catch(err){ console.error(err); setConn('error', err.message); }
+}
+
+applyThresholdOverrides(); renderThresholdSettings(); populateHistSelect();
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+loadData(); setInterval(loadData, REFRESH_MS);
+</script>
+</body>
+</html>
