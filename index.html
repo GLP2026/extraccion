@@ -333,20 +333,20 @@ const KNOWN_PUMPS = ['P2A','P2B','P3A','P3B','P3C','P3D','P3E','P3F','P3G','P3H'
 /* Posiciones por defecto de cada bomba sobre extractor-bg.png, en % del ancho/alto de la imagen.
    Son una primera estimación — usar "Calibrar posiciones" para ajustarlas a la imagen real. */
 const DEFAULT_PUMP_POSITIONS = {
-  P2B: { x: 7,  y: 88 },
-  P3F: { x: 16, y: 79 },
-  P3A: { x: 22, y: 90 },
-  P3B: { x: 28, y: 79 },
-  P3C: { x: 33, y: 90 },
-  P3D: { x: 38, y: 79 },
-  P3E: { x: 44, y: 90 },
-  P3G: { x: 52, y: 79 },
-  P3H: { x: 54, y: 90 },
-  P3I: { x: 65, y: 79 },
-  P3J: { x: 64, y: 90 },
-  P3K: { x: 74, y: 79 },
-  '5G': { x: 91, y: 48 },
-  P2A: { x: 93, y: 94 },
+  P2B: { x: 10.5, y: 86.5 },
+  P3F: { x: 18.5, y: 76.5 },
+  P3A: { x: 23,   y: 90.5 },
+  P3B: { x: 30,   y: 76.5 },
+  P3C: { x: 34.5, y: 90.5 },
+  P3D: { x: 40.5, y: 76.5 },
+  P3E: { x: 45,   y: 90.5 },
+  P3G: { x: 51.5, y: 76.5 },
+  P3H: { x: 55.5, y: 90.5 },
+  P3I: { x: 62.5, y: 76.5 },
+  P3J: { x: 65.5, y: 90.5 },
+  P3K: { x: 73,   y: 76.5 },
+  '5G': { x: 91,  y: 48 },
+  P2A: { x: 92,   y: 94 },
 };
 
 function evalFromBands(v, bands){
@@ -649,7 +649,7 @@ function renderLavadosPanel(rows){
   const last = rows[rows.length-1];
   const active = last ? last.lavadosActive : new Set();
   const container = document.getElementById('lavadosMarkers');
-  container.innerHTML = KNOWN_PUMPS.map(code => {
+  container.innerHTML = KNOWN_PUMPS.filter(code => code !== '5G').map(code => {
     const pos = pumpPositions[code];
     const isOn = active.has(code);
     return `<div class="lavados-marker ${isOn?'on':'off'}${calibrating?' calibrating':''}" data-code="${code}" style="left:${pos.x}%; top:${pos.y}%;" title="${code}">${calibrating?code:''}</div>`;
